@@ -363,11 +363,17 @@
   var md = '| # | Tag | Role | Accessible Name | Source | Selector |\n';
   md += '|---|-----|------|-----------------|--------|----------|\n';
   results.forEach(function (r) {
-    var n = r.missing && !r.name ? '⚠ **MISSING**' : (r.missing ? '⚠ ' + mdEsc(r.name) : mdEsc(r.name));
+    var n = r.missing && !r.name ? '⚠ **MISSING**' : (r.missing ? '⚠ **Placeholder only:** ' + mdEsc(r.name) : mdEsc(r.name));
     md += '| ' + r.index + ' | `' + r.tag + '` | ' + (r.role || '') + ' | ' + n + ' | ' + (r.src || '') + ' | `' + mdEsc(r.selector) + '` |\n';
   });
 
-  var missCount = results.filter(function (r) { return r.missing; }).length;
+  // We count two kinds of problems: truly-missing (no name from any source) and
+  // placeholder-only (the only name we found is `placeholder`, which isn't a
+  // spec-valid accessible name). Both are real accessibility bugs, but they
+  // should be presented distinctly so the auditor can prioritise.
+  var missingCount = results.filter(function (r) { return r.missing && !r.name; }).length;
+  var placeholderOnlyCount = results.filter(function (r) { return r.missing && r.name; }).length;
+  var missCount = missingCount + placeholderOnlyCount;
 
   /* ---------- console ---------- */
   console.group('%c[a11y-names] ' + results.length + ' interactive elements (' + missCount + ' missing) — top doc + ' +
@@ -392,9 +398,16 @@
   panelEl.className = 'panel';
 
   var summary = '';
-  if (results.length === 0) summary += '<span class="warn">No interactive elements found.</span>';
-  else if (missCount) summary += '<span class="miss">' + missCount + ' element' + (missCount === 1 ? '' : 's') + ' missing an accessible name.</span>';
-  else summary += '<span class="ok">All elements have an accessible name.</span>';
+  if (results.length === 0) {
+    summary += '<span class="warn">No interactive elements found.</span>';
+  } else if (missCount === 0) {
+    summary += '<span class="ok">All elements have an accessible name.</span>';
+  } else {
+    var bits = [];
+    if (missingCount) bits.push(missingCount + ' missing an accessible name');
+    if (placeholderOnlyCount) bits.push(placeholderOnlyCount + ' with placeholder only (not a spec accname)');
+    summary += '<span class="miss">' + bits.join(', ') + '.</span>';
+  }
   if (inaccessibleFrames) summary += '<br><span class="warn">⚠ ' + inaccessibleFrames + ' cross-origin iframe(s) skipped.</span>';
   summary += '<div style="margin-top:6px;color:#555;font-size:16px">Walked top doc' + (accessibleFrames ? ' + ' + accessibleFrames + ' iframe' + (accessibleFrames === 1 ? '' : 's') : '') + (shadowRoots ? ' + ' + shadowRoots + ' shadow root' + (shadowRoots === 1 ? '' : 's') : '') + '.</div>';
 
@@ -409,7 +422,7 @@
     var li = document.createElement('li');
     li.innerHTML =
       '<div class="meta">#' + r.index + ' <code>' + esc(r.tag) + '</code>' + (r.role ? ' [' + esc(r.role) + ']' : '') + '</div>' +
-      '<div class="' + (r.missing && !r.name ? 'miss' : 'name') + '">' + (r.missing && !r.name ? '⚠ NO ACCESSIBLE NAME' : esc(r.name)) + '</div>' +
+      '<div class="' + (r.missing ? 'miss' : 'name') + '">' + (r.missing && !r.name ? '⚠ NO ACCESSIBLE NAME' : (r.missing ? '⚠ Placeholder only: ' + esc(r.name) : esc(r.name))) + '</div>' +
       (r.src ? '<div class="src">via ' + esc(r.src) + ' &middot; ' + esc(r.selector) + '</div>' : '');
     li.addEventListener('click', function () {
       try {

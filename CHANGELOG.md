@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] — 2026-05-11
+
+### Fixed
+
+- **Placeholder-only inputs now display as a problem in the panel**, matching how they're already counted in the summary. Previously a form input whose only "name" was its `placeholder` attribute was counted as missing in the header tally but rendered in the panel with the normal blue "name" styling, so the count and the visible list disagreed (e.g. "3 missing" but only 2 entries looked red). Placeholder-only entries now render with the red "miss" styling and the prefix "⚠ Placeholder only: …" so the count and the list are consistent.
+
+### Changed
+
+- The summary line now splits the problem count into the two distinct categories: "N missing an accessible name, M with placeholder only (not a spec accname)". This lets the auditor prioritise truly-unnamed elements over placeholder-only ones.
+- Markdown table output uses **Placeholder only:** as a bold prefix for placeholder-only entries (was just `⚠ name`).
+- Bumped extension manifests to `1.0.4`.
+
 ## [1.0.3] — 2026-05-11
 
 ### Fixed
