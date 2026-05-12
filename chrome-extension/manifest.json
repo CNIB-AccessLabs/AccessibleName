@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "a11y: Accessible Names",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reports the computed accessible name of every interactive element on a page, across iframes (including cross-origin) and shadow DOM. No network calls.",
   "permissions": ["activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],

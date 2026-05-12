@@ -8,6 +8,9 @@
  *   3. Inject `displayResults` into the top frame with the aggregated data.
  *      The top frame draws one panel and positions badges over both same-origin
  *      and cross-origin frame content using each iframe's bounding rect.
+ *      The panel + badges are wrapped in a Shadow DOM so site CSS can't bleed
+ *      into the inspector UI; outlines on inspected elements are set with
+ *      !important so site-wide `outline: none` resets can't suppress them.
  *
  * scanFrame and displayResults must be self-contained — `scripting.executeScript`
  * with `func:` serializes the function source and cannot capture outer scope.
@@ -20,9 +23,8 @@ api.action.onClicked.addListener(handleClick);
 async function handleClick(tab) {
   if (!tab || tab.id == null) return;
   try {
-    // First, check whether the panel is already up in the top frame. If so,
-    // this click is a toggle-off — skip the scan entirely and tell the top
-    // frame to clean up.
+    // Check whether the panel is already up in the top frame. If so, this click
+    // is a toggle-off — skip the scan entirely and tell the top frame to clean up.
     const probe = await api.scripting.executeScript({
       target: { tabId: tab.id, frameIds: [0] },
       func: () => !!window.__a11yn_ext_cleanup
@@ -63,6 +65,7 @@ async function handleClick(tab) {
 
 /* ============================================================
  * scanFrame — runs in every frame. Must be self-contained.
+ * Returns serializable element data; no DOM manipulation here.
  * ============================================================ */
 function scanFrame() {
   "use strict";
@@ -271,6 +274,8 @@ function scanFrame() {
 
 /* ============================================================
  * displayResults — runs in the top frame only.
+ * UI lives inside a closed Shadow DOM so site styles don't bleed in.
+ * All UI text is at least 16px for accessibility.
  * ============================================================ */
 function displayResults(framesData) {
   "use strict";
@@ -279,12 +284,9 @@ function displayResults(framesData) {
   // Defensive: clean up any stale state before redrawing.
   if (window[P + "cleanup"]) window[P + "cleanup"]();
 
-  // Build a map: frame URL -> iframe rect in top doc viewport (for direct children).
-  // For cross-origin iframes we can't access contentWindow, but iframe.src usually
-  // matches the frame's reported URL. We also keep a list of iframes for fallback.
+  // Build a map: frame URL -> iframe element in top doc (for direct children).
   var iframes = Array.prototype.slice.call(document.querySelectorAll("iframe, frame"));
   var iframeByUrl = new Map();
-  var iframeUnknown = []; // iframes whose URL we couldn't determine for cross-frame matching
   iframes.forEach(function (f) {
     var url = "";
     try {
@@ -294,36 +296,7 @@ function displayResults(framesData) {
     } catch (e) { /* cross-origin */ }
     if (!url && f.src) url = f.src;
     if (url && !iframeByUrl.has(url)) iframeByUrl.set(url, f);
-    else iframeUnknown.push(f);
   });
-
-  /* ---------- styles ---------- */
-  var style = document.createElement("style");
-  style.id = P + "style";
-  style.textContent =
-    "." + P + "badge{position:absolute;z-index:2147483646;background:#003876;color:#fff;font:11px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:2px 6px;border-radius:3px;pointer-events:none;max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 3px rgba(0,0,0,.4);}" +
-    "." + P + "badge-miss{background:#b00020;}" +
-    "." + P + "badge-frame{background:#0a5d2e;}" +
-    "." + P + "badge-frame." + P + "badge-miss{background:#7a1518;}" +
-    "#" + P + "panel{position:fixed;top:12px;right:12px;width:400px;max-height:85vh;display:flex;flex-direction:column;z-index:2147483647;background:#fff;color:#111;border:1px solid #bbb;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.25);font:12px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}" +
-    "#" + P + "panel header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#003876;color:#fff;border-radius:6px 6px 0 0;flex:0 0 auto;}" +
-    "#" + P + "panel header strong{font-size:13px;}" +
-    "#" + P + "panel .btns{display:flex;gap:6px;}" +
-    "#" + P + "panel button{background:transparent;border:1px solid #fff;color:#fff;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit;}" +
-    "#" + P + "panel button:hover{background:rgba(255,255,255,.15);}" +
-    "#" + P + "panel .summary{padding:8px 12px;border-bottom:1px solid #eee;background:#f5f7fa;flex:0 0 auto;}" +
-    "#" + P + "panel .summary .miss{color:#b00020;font-weight:600;}" +
-    "#" + P + "panel .summary .ok{color:#0a8043;font-weight:600;}" +
-    "#" + P + "panel .summary .warn{color:#b45309;font-weight:600;}" +
-    "#" + P + "panel ol{margin:0;padding:0;list-style:none;overflow:auto;flex:1 1 auto;}" +
-    "#" + P + "panel li{padding:7px 12px;border-bottom:1px solid #eee;cursor:pointer;}" +
-    "#" + P + "panel li:hover{background:#eef4ff;}" +
-    "#" + P + "panel li .meta{color:#555;font-size:11px;}" +
-    "#" + P + "panel li .name{font-weight:600;color:#111;}" +
-    "#" + P + "panel li .miss{color:#b00020;font-weight:600;}" +
-    "#" + P + "panel li .src{color:#777;font-size:10px;font-style:italic;word-break:break-all;}" +
-    "#" + P + "panel li.frame-tag{border-left:3px solid #0a5d2e;}";
-  document.head.appendChild(style);
 
   /* ---------- flatten results with computed top-doc coords ---------- */
   var allResults = [];
@@ -338,7 +311,7 @@ function displayResults(framesData) {
       if (iframe) {
         var ir = iframe.getBoundingClientRect();
         offX = ir.left; offY = ir.top;
-        try { frame.iframeEl = iframe; } catch (e) {}
+        frame.iframeEl = iframe;
       } else {
         positioned = false;
         unmatchedFrames++;
@@ -362,34 +335,100 @@ function displayResults(framesData) {
         pageTop: window.scrollY + offY + r.rect.top,
         pageLeft: window.scrollX + offX + r.rect.left,
         positioned: positioned,
-        // For same-origin frames we can later resolve a real element via selector;
-        // for cross-origin we can scroll the iframe element into view.
-        iframeEl: inFrame ? iframeByUrl.get(frame.url) || null : null
+        iframeEl: inFrame ? iframeByUrl.get(frame.url) || null : null,
+        // Keep a reference to the page element so click-to-scroll can scroll it.
+        // We can't get a real element reference for cross-origin frames, but we
+        // store enough to identify them in same-origin cases via querySelector.
+        _resolveEl: null
       });
     });
   });
 
-  // Stable indexing
   allResults.forEach(function (r, i) { r.index = i + 1; });
 
-  /* ---------- badges ---------- */
+  /* ---------- outlines on inspected elements (with !important) ---------- */
+  // The scanner already ran in each frame; we don't have a direct element handle
+  // for elements that live in a child frame. We outline what we can reach in the
+  // top doc by re-querying via selector inside the appropriate document.
+  allResults.forEach(function (r) {
+    var doc;
+    if (r.isTop) {
+      doc = document;
+    } else if (r.iframeEl) {
+      try { doc = r.iframeEl.contentDocument; } catch (e) { doc = null; }
+    }
+    if (!doc) return;
+    // The selector returned by the scanner is best-effort and not always unique.
+    // We use it to find the first match, which is good enough for the common case.
+    try {
+      var el = doc.querySelector(r.selector);
+      if (el) {
+        r._resolveEl = el;
+        el.style.setProperty("outline", r.missing ? "2px dashed #b00020" : "2px solid #003876", "important");
+        el.style.setProperty("outline-offset", "1px", "important");
+      }
+    } catch (e) {}
+  });
+
+  /* ---------- shadow-DOM host: isolates UI from page styles ---------- */
+  var host = document.createElement("div");
+  host.id = P + "host";
+  host.setAttribute("aria-hidden", "true");
+  host.style.cssText = "all:initial !important;position:absolute !important;top:0 !important;left:0 !important;width:0 !important;height:0 !important;margin:0 !important;padding:0 !important;border:0 !important;pointer-events:none !important;z-index:2147483647 !important;";
+  (document.body || document.documentElement).appendChild(host);
+  var shadow = host.attachShadow({ mode: "closed" });
+
+  var css =
+    ":host{all:initial;}" +
+    "*,*::before,*::after{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,Helvetica,Arial,sans-serif;font-style:normal;font-weight:normal;font-variant:normal;text-transform:none;letter-spacing:normal;text-decoration:none;color:#111;}" +
+    ".badge{position:absolute;background:#003876;color:#fff;font-size:16px;font-weight:600;line-height:1.2;padding:4px 8px;border-radius:3px;pointer-events:none;max-width:380px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 3px rgba(0,0,0,.4);}" +
+    ".badge.miss{background:#b00020;}" +
+    ".badge.frame{background:#0a5d2e;}" +
+    ".badge.frame.miss{background:#7a1518;}" +
+    ".panel{position:fixed;top:12px;right:12px;width:460px;max-height:85vh;display:flex;flex-direction:column;background:#fff;color:#111;border:1px solid #bbb;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:16px;line-height:1.4;pointer-events:auto;}" +
+    ".panel header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#003876;color:#fff;border-radius:6px 6px 0 0;}" +
+    ".panel header strong{font-size:18px;font-weight:600;color:#fff;}" +
+    ".panel .btns{display:flex;gap:8px;}" +
+    ".panel button{background:transparent;border:1px solid #fff;color:#fff;padding:6px 12px;border-radius:3px;cursor:pointer;font-size:16px;font-weight:500;line-height:1.2;}" +
+    ".panel button:hover{background:rgba(255,255,255,.18);}" +
+    ".panel .summary{padding:10px 14px;border-bottom:1px solid #eee;background:#f5f7fa;font-size:16px;}" +
+    ".panel .summary .miss{color:#b00020;font-weight:600;}" +
+    ".panel .summary .ok{color:#0a8043;font-weight:600;}" +
+    ".panel .summary .warn{color:#b45309;font-weight:600;}" +
+    ".panel ol{margin:0;padding:0;list-style:none;overflow:auto;flex:1 1 auto;}" +
+    ".panel li{padding:10px 14px;border-bottom:1px solid #eee;cursor:pointer;font-size:16px;}" +
+    ".panel li:hover{background:#eef4ff;}" +
+    ".panel li.frame-tag{border-left:3px solid #0a5d2e;}" +
+    ".panel li .meta{color:#555;font-size:16px;margin-bottom:2px;}" +
+    ".panel li .frame-label{color:#0a5d2e;font-weight:600;}" +
+    ".panel li .name{font-weight:600;color:#111;font-size:16px;}" +
+    ".panel li .miss{color:#b00020;font-weight:600;font-size:16px;}" +
+    ".panel li .src{color:#666;font-size:16px;font-style:italic;margin-top:2px;word-break:break-all;}" +
+    ".panel code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:16px;background:rgba(0,0,0,.06);padding:1px 5px;border-radius:3px;}";
+
+  var styleEl = document.createElement("style");
+  styleEl.textContent = css;
+  shadow.appendChild(styleEl);
+
+  /* ---------- badges (inside shadow, positioned in top-doc coords) ---------- */
   var badges = [];
   allResults.forEach(function (r) {
     if (!r.positioned) return;
     var badge = document.createElement("div");
-    var cls = P + "badge";
-    if (r.missing) cls += " " + P + "badge-miss";
-    if (!r.isTop) cls += " " + P + "badge-frame";
+    var cls = "badge";
+    if (r.missing) cls += " miss";
+    if (!r.isTop) cls += " frame";
     badge.className = cls;
     var prefix = r.isTop ? "" : "[frame] ";
     badge.textContent = "#" + r.index + " " + prefix + (r.role || r.tag) + ": " + (r.missing ? (r.name ? "⚠ " + r.name : "NO NAME") : r.name);
-    badge.style.top = (r.pageTop - 18) + "px";
+    badge.style.top = (r.pageTop - 28) + "px";
     badge.style.left = r.pageLeft + "px";
-    document.body.appendChild(badge);
+    shadow.appendChild(badge);
     badges.push(badge);
+    r.badge = badge;
   });
 
-  /* ---------- panel + console output ---------- */
+  /* ---------- markdown + console ---------- */
   var missCount = allResults.filter(function (r) { return r.missing; }).length;
   var frameCount = framesData.filter(function (f) { return !f.isTop && f.results && f.results.length; }).length;
 
@@ -411,21 +450,22 @@ function displayResults(framesData) {
   console.log("%cMarkdown table:", "font-weight:bold");
   console.log(md);
   if (unmatchedFrames > 0) {
-    console.warn("[a11y-names] " + unmatchedFrames + " frame(s) could not be matched to an iframe element in the top doc — their results are in the panel but badges are not drawn. This usually means nested iframes; the panel still includes everything.");
+    console.warn("[a11y-names] " + unmatchedFrames + " frame(s) could not be matched to an iframe element in the top doc.");
   }
   console.groupEnd();
 
-  var panelEl = document.createElement("div");
-  panelEl.id = P + "panel";
-
+  /* ---------- panel ---------- */
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
+
+  var panelEl = document.createElement("div");
+  panelEl.className = "panel";
 
   var summary = "";
   if (allResults.length === 0) summary += '<span class="warn">No interactive elements found.</span>';
   else if (missCount) summary += '<span class="miss">' + missCount + " element" + (missCount === 1 ? "" : "s") + " missing an accessible name.</span>";
   else summary += '<span class="ok">All elements have an accessible name.</span>';
-  if (unmatchedFrames) summary += '<br><span class="warn">⚠ ' + unmatchedFrames + " frame(s) couldn't be positioned (likely nested iframes).</span>";
-  summary += '<div style="margin-top:4px;color:#555;font-size:11px">Top doc' + (frameCount ? " + " + frameCount + " frame" + (frameCount === 1 ? "" : "s") : "") + ".</div>";
+  if (unmatchedFrames) summary += '<br><span class="warn">⚠ ' + unmatchedFrames + " frame(s) couldn't be positioned.</span>";
+  summary += '<div style="margin-top:6px;color:#555;font-size:16px">Top doc' + (frameCount ? " + " + frameCount + " frame" + (frameCount === 1 ? "" : "s") : "") + ".</div>";
 
   panelEl.innerHTML =
     "<header><strong>Accessible Names (" + allResults.length + ")</strong>" +
@@ -437,39 +477,29 @@ function displayResults(framesData) {
   allResults.forEach(function (r) {
     var li = document.createElement("li");
     if (!r.isTop) li.classList.add("frame-tag");
-    var location = r.isTop ? "" : '<span style="color:#0a5d2e">[' + esc(r.frameLabel || r.frameUrl) + ']</span> ';
+    var location = r.isTop ? "" : '<span class="frame-label">[' + esc(r.frameLabel || r.frameUrl) + ']</span> ';
     li.innerHTML =
       '<div class="meta">#' + r.index + " " + location + "<code>" + esc(r.tag) + "</code>" + (r.role ? " [" + esc(r.role) + "]" : "") + "</div>" +
       '<div class="' + (r.missing && !r.name ? "miss" : "name") + '">' + (r.missing && !r.name ? "⚠ NO ACCESSIBLE NAME" : esc(r.name)) + "</div>" +
       (r.src ? '<div class="src">via ' + esc(r.src) + " &middot; " + esc(r.selector) + "</div>" : "");
     li.addEventListener("click", function () {
-      // For cross-origin frames we can scroll the IFRAME element into view; for
-      // top-frame elements we'd need a real reference. With cross-origin we don't
-      // have one in the top doc, so just scroll the badge into view.
-      if (r.isTop) {
-        // best-effort: scroll the badge
-        var badge = badges.find(function (b) { return b.textContent.indexOf("#" + r.index + " ") === 0; });
-        if (badge) {
-          badge.scrollIntoView({ behavior: "smooth", block: "center" });
-          var prev = badge.style.boxShadow;
-          badge.style.boxShadow = "0 0 0 4px #ffeb3b";
-          setTimeout(function () { badge.style.boxShadow = prev; }, 1400);
-        }
-      } else {
-        if (r.iframeEl) {
+      try {
+        if (r._resolveEl) {
+          r._resolveEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          r._resolveEl.style.setProperty("box-shadow", "0 0 0 4px #ffeb3b", "important");
+          setTimeout(function () { try { r._resolveEl.style.removeProperty("box-shadow"); } catch (e) {} }, 1400);
+        } else if (r.iframeEl) {
           r.iframeEl.scrollIntoView({ behavior: "smooth", block: "center" });
         }
-        var b2 = badges.find(function (b) { return b.textContent.indexOf("#" + r.index + " ") === 0; });
-        if (b2) {
-          var prev2 = b2.style.boxShadow;
-          b2.style.boxShadow = "0 0 0 4px #ffeb3b";
-          setTimeout(function () { b2.style.boxShadow = prev2; }, 1400);
+        if (r.badge) {
+          r.badge.style.setProperty("box-shadow", "0 0 0 4px #ffeb3b", "important");
+          setTimeout(function () { try { r.badge.style.removeProperty("box-shadow"); } catch (e) {} }, 1400);
         }
-      }
+      } catch (e) {}
     });
     list.appendChild(li);
   });
-  document.body.appendChild(panelEl);
+  shadow.appendChild(panelEl);
 
   panelEl.querySelector("#" + P + "close").addEventListener("click", function () { window[P + "cleanup"](); });
   panelEl.querySelector("#" + P + "copy").addEventListener("click", function (e) {
@@ -484,9 +514,16 @@ function displayResults(framesData) {
   });
 
   window[P + "cleanup"] = function () {
-    try { panelEl.remove(); } catch (e) {}
-    try { style.remove(); } catch (e) {}
-    badges.forEach(function (b) { try { b.remove(); } catch (e) {} });
+    try { host.remove(); } catch (e) {}
+    // Restore outlines on elements we touched
+    allResults.forEach(function (r) {
+      if (r._resolveEl) {
+        try {
+          r._resolveEl.style.removeProperty("outline");
+          r._resolveEl.style.removeProperty("outline-offset");
+        } catch (e) {}
+      }
+    });
     delete window[P + "cleanup"];
     console.log("%c[a11y-names] cleared.", "color:#003876");
   };

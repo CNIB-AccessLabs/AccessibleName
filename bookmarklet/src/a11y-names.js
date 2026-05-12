@@ -37,19 +37,14 @@
     seen.add(el);
     var parts = [];
     for (var n = el.firstChild; n; n = n.nextSibling) {
-      if (n.nodeType === 3) {
-        parts.push(n.nodeValue);
-      } else if (n.nodeType === 1) {
+      if (n.nodeType === 3) parts.push(n.nodeValue);
+      else if (n.nodeType === 1) {
         if (isHidden(n)) continue;
         var aLab = n.getAttribute && n.getAttribute('aria-labelledby');
         if (aLab) { parts.push(refNames(aLab, n, seen)); continue; }
         var aL = n.getAttribute && n.getAttribute('aria-label');
         if (aL && aL.trim()) { parts.push(aL); continue; }
-        if (n.tagName === 'IMG') {
-          var alt = n.getAttribute('alt');
-          if (alt) parts.push(alt);
-          continue;
-        }
+        if (n.tagName === 'IMG') { var alt = n.getAttribute('alt'); if (alt) parts.push(alt); continue; }
         if (n.tagName === 'INPUT') {
           var t = (n.getAttribute('type') || 'text').toLowerCase();
           if (t === 'button' || t === 'submit' || t === 'reset') { if (n.value) parts.push(n.value); }
@@ -80,10 +75,7 @@
     var root = el.getRootNode ? el.getRootNode() : doc;
 
     var aLab = el.getAttribute('aria-labelledby');
-    if (aLab) {
-      var n1 = refNames(aLab, el, seen);
-      if (n1) return { name: n1, src: 'aria-labelledby' };
-    }
+    if (aLab) { var n1 = refNames(aLab, el, seen); if (n1) return { name: n1, src: 'aria-labelledby' }; }
     var aL = el.getAttribute('aria-label');
     if (aL && aL.trim()) return { name: aL.trim(), src: 'aria-label' };
 
@@ -93,16 +85,10 @@
       if (el.id) {
         var sel = 'label[for="' + (window.CSS && CSS.escape ? CSS.escape(el.id) : el.id.replace(/"/g, '\\"')) + '"]';
         var lab = (root.querySelector && root.querySelector(sel)) || doc.querySelector(sel);
-        if (lab) {
-          var n2 = nameFromContent(lab, seen);
-          if (n2) return { name: n2, src: 'label[for]' };
-        }
+        if (lab) { var n2 = nameFromContent(lab, seen); if (n2) return { name: n2, src: 'label[for]' }; }
       }
       var wrap = el.closest && el.closest('label');
-      if (wrap) {
-        var n3 = nameFromContent(wrap, seen);
-        if (n3) return { name: n3, src: 'wrapping <label>' };
-      }
+      if (wrap) { var n3 = nameFromContent(wrap, seen); if (n3) return { name: n3, src: 'wrapping <label>' }; }
       if (tag === 'input') {
         var t2 = (el.getAttribute('type') || 'text').toLowerCase();
         if (t2 === 'button' || t2 === 'submit' || t2 === 'reset') {
@@ -114,17 +100,11 @@
       }
     }
 
-    if (tag === 'img') {
-      var alt2 = el.getAttribute('alt');
-      if (alt2 !== null) return { name: alt2, src: 'alt' };
-    }
+    if (tag === 'img') { var alt2 = el.getAttribute('alt'); if (alt2 !== null) return { name: alt2, src: 'alt' }; }
 
     if (tag === 'fieldset') {
       var lg = el.querySelector(':scope > legend');
-      if (lg) {
-        var n4 = nameFromContent(lg, seen);
-        if (n4) return { name: n4, src: 'legend' };
-      }
+      if (lg) { var n4 = nameFromContent(lg, seen); if (n4) return { name: n4, src: 'legend' }; }
     }
 
     if (tag === 'a' || tag === 'button' || tag === 'summary' || tag === 'details' ||
@@ -171,9 +151,7 @@
     var tag = el.tagName.toLowerCase();
     var cls = '';
     if (typeof el.className === 'string' && el.className.trim()) {
-      cls = el.className.trim().split(/\s+/)
-        .filter(function (c) { return c.indexOf(P) !== 0; })
-        .slice(0, 2).map(function (c) { return '.' + c; }).join('');
+      cls = el.className.trim().split(/\s+/).slice(0, 2).map(function (c) { return '.' + c; }).join('');
     }
     var inFrame = el.ownerDocument && el.ownerDocument !== document ? ' [in iframe]' : '';
     var inShadow = el.getRootNode && el.getRootNode().host ? ' [in shadow]' : '';
@@ -194,7 +172,7 @@
     '[role="searchbox"]', '[role="slider"]', '[role="spinbutton"]', '[role="treeitem"]'
   ].join(',');
 
-  /* ---------- recursive walk: top doc + same-origin iframes + open shadow roots ---------- */
+  /* ---------- walk: top doc + same-origin iframes + open shadow roots ---------- */
   var results = [];
   var inaccessibleFrames = 0;
   var accessibleFrames = 0;
@@ -225,14 +203,10 @@
       });
     });
 
-    // Recurse into iframes and shadow roots
     var all;
     try { all = root.querySelectorAll('*'); } catch (e) { all = []; }
     Array.prototype.forEach.call(all, function (el) {
-      if (el.shadowRoot) {
-        shadowRoots++;
-        walk(el.shadowRoot, offX, offY);
-      }
+      if (el.shadowRoot) { shadowRoots++; walk(el.shadowRoot, offX, offY); }
       if (el.tagName === 'IFRAME' || el.tagName === 'FRAME') {
         var doc = null;
         try { doc = el.contentDocument; } catch (e) {}
@@ -240,55 +214,66 @@
           accessibleFrames++;
           var ir = el.getBoundingClientRect();
           walk(doc, offX + ir.left, offY + ir.top);
-        } else {
-          inaccessibleFrames++;
-        }
+        } else { inaccessibleFrames++; }
       }
     });
   }
 
   walk(document, 0, 0);
 
-  /* ---------- styles (top doc only — panel + badges live there) ---------- */
-  var style = document.createElement('style');
-  style.id = P + 'style';
-  style.textContent =
-    '.' + P + 'badge{position:absolute;z-index:2147483646;background:#003876;color:#fff;font:11px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:2px 6px;border-radius:3px;pointer-events:none;max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 3px rgba(0,0,0,.4);}' +
-    '.' + P + 'badge-miss{background:#b00020;}' +
-    '#' + P + 'panel{position:fixed;top:12px;right:12px;width:380px;max-height:85vh;display:flex;flex-direction:column;z-index:2147483647;background:#fff;color:#111;border:1px solid #bbb;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.25);font:12px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}' +
-    '#' + P + 'panel header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#003876;color:#fff;border-radius:6px 6px 0 0;flex:0 0 auto;}' +
-    '#' + P + 'panel header strong{font-size:13px;}' +
-    '#' + P + 'panel .btns{display:flex;gap:6px;}' +
-    '#' + P + 'panel button{background:transparent;border:1px solid #fff;color:#fff;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit;}' +
-    '#' + P + 'panel button:hover{background:rgba(255,255,255,.15);}' +
-    '#' + P + 'panel .summary{padding:8px 12px;border-bottom:1px solid #eee;background:#f5f7fa;flex:0 0 auto;}' +
-    '#' + P + 'panel .summary .miss{color:#b00020;font-weight:600;}' +
-    '#' + P + 'panel .summary .ok{color:#0a8043;font-weight:600;}' +
-    '#' + P + 'panel .summary .warn{color:#b45309;font-weight:600;}' +
-    '#' + P + 'panel ol{margin:0;padding:0;list-style:none;overflow:auto;flex:1 1 auto;}' +
-    '#' + P + 'panel li{padding:7px 12px;border-bottom:1px solid #eee;cursor:pointer;}' +
-    '#' + P + 'panel li:hover{background:#eef4ff;}' +
-    '#' + P + 'panel li .meta{color:#555;font-size:11px;}' +
-    '#' + P + 'panel li .name{font-weight:600;color:#111;}' +
-    '#' + P + 'panel li .miss{color:#b00020;font-weight:600;}' +
-    '#' + P + 'panel li .src{color:#777;font-size:10px;font-style:italic;}';
-  document.head.appendChild(style);
-
-  /* ---------- badges + outlines (outline via inline style so it works in iframes/shadow) ---------- */
+  /* ---------- outlines on elements (with !important so page CSS can't suppress) ---------- */
   results.forEach(function (r, i) {
     r.index = i + 1;
     try {
-      r.origOutline = r.el.style.outline || '';
-      r.origOutlineOffset = r.el.style.outlineOffset || '';
-      r.el.style.outline = r.missing ? '2px dashed #b00020' : '2px solid #003876';
-      r.el.style.outlineOffset = '1px';
+      r.el.style.setProperty('outline', r.missing ? '2px dashed #b00020' : '2px solid #003876', 'important');
+      r.el.style.setProperty('outline-offset', '1px', 'important');
     } catch (e) {}
+  });
+
+  /* ---------- shadow-DOM host: isolates UI from page styles ---------- */
+  var host = document.createElement('div');
+  host.id = P + 'host';
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = 'all:initial !important;position:absolute !important;top:0 !important;left:0 !important;width:0 !important;height:0 !important;margin:0 !important;padding:0 !important;border:0 !important;pointer-events:none !important;z-index:2147483647 !important;';
+  (document.body || document.documentElement).appendChild(host);
+  var shadow = host.attachShadow({ mode: 'closed' });
+
+  var css =
+    ':host{all:initial;}' +
+    '*,*::before,*::after{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,Helvetica,Arial,sans-serif;font-style:normal;font-weight:normal;font-variant:normal;text-transform:none;letter-spacing:normal;text-decoration:none;color:#111;}' +
+    '.badge{position:absolute;background:#003876;color:#fff;font-size:16px;font-weight:600;line-height:1.2;padding:4px 8px;border-radius:3px;pointer-events:none;max-width:380px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 3px rgba(0,0,0,.4);}' +
+    '.badge.miss{background:#b00020;}' +
+    '.panel{position:fixed;top:12px;right:12px;width:440px;max-height:85vh;display:flex;flex-direction:column;background:#fff;color:#111;border:1px solid #bbb;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:16px;line-height:1.4;pointer-events:auto;}' +
+    '.panel header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#003876;color:#fff;border-radius:6px 6px 0 0;}' +
+    '.panel header strong{font-size:18px;font-weight:600;color:#fff;}' +
+    '.panel .btns{display:flex;gap:8px;}' +
+    '.panel button{background:transparent;border:1px solid #fff;color:#fff;padding:6px 12px;border-radius:3px;cursor:pointer;font-size:16px;font-weight:500;line-height:1.2;}' +
+    '.panel button:hover{background:rgba(255,255,255,.18);}' +
+    '.panel .summary{padding:10px 14px;border-bottom:1px solid #eee;background:#f5f7fa;font-size:16px;}' +
+    '.panel .summary .miss{color:#b00020;font-weight:600;}' +
+    '.panel .summary .ok{color:#0a8043;font-weight:600;}' +
+    '.panel .summary .warn{color:#b45309;font-weight:600;}' +
+    '.panel ol{margin:0;padding:0;list-style:none;overflow:auto;flex:1 1 auto;}' +
+    '.panel li{padding:10px 14px;border-bottom:1px solid #eee;cursor:pointer;font-size:16px;}' +
+    '.panel li:hover{background:#eef4ff;}' +
+    '.panel li .meta{color:#555;font-size:16px;margin-bottom:2px;}' +
+    '.panel li .name{font-weight:600;color:#111;font-size:16px;}' +
+    '.panel li .miss{color:#b00020;font-weight:600;font-size:16px;}' +
+    '.panel li .src{color:#666;font-size:16px;font-style:italic;margin-top:2px;word-break:break-all;}' +
+    '.panel code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:16px;background:rgba(0,0,0,.06);padding:1px 5px;border-radius:3px;}';
+
+  var styleEl = document.createElement('style');
+  styleEl.textContent = css;
+  shadow.appendChild(styleEl);
+
+  /* ---------- badges ---------- */
+  results.forEach(function (r) {
     var badge = document.createElement('div');
-    badge.className = P + 'badge' + (r.missing ? ' ' + P + 'badge-miss' : '');
+    badge.className = 'badge' + (r.missing ? ' miss' : '');
     badge.textContent = '#' + r.index + ' ' + (r.role || r.tag) + ': ' + (r.missing ? (r.name ? '⚠ ' + r.name : 'NO NAME') : r.name);
-    badge.style.top = (r.pageTop - 18) + 'px';
+    badge.style.top = (r.pageTop - 28) + 'px';
     badge.style.left = r.pageLeft + 'px';
-    document.body.appendChild(badge);
+    shadow.appendChild(badge);
     r.badge = badge;
   });
 
@@ -315,21 +300,22 @@
   console.log('%cMarkdown table:', 'font-weight:bold');
   console.log(md);
   if (inaccessibleFrames > 0) {
-    console.warn('[a11y-names] ' + inaccessibleFrames + ' cross-origin iframe(s) skipped. Right-click the frame in Firefox → "This Frame → Open Frame in New Tab" and re-run there for full coverage.');
+    console.warn('[a11y-names] ' + inaccessibleFrames + ' cross-origin iframe(s) skipped. Right-click the frame in the browser and use "Open Frame in New Tab" to re-run the bookmarklet inside.');
   }
   console.groupEnd();
 
   /* ---------- panel ---------- */
-  var panelEl = document.createElement('div');
-  panelEl.id = P + 'panel';
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+
+  var panelEl = document.createElement('div');
+  panelEl.className = 'panel';
 
   var summary = '';
   if (results.length === 0) summary += '<span class="warn">No interactive elements found.</span>';
   else if (missCount) summary += '<span class="miss">' + missCount + ' element' + (missCount === 1 ? '' : 's') + ' missing an accessible name.</span>';
   else summary += '<span class="ok">All elements have an accessible name.</span>';
   if (inaccessibleFrames) summary += '<br><span class="warn">⚠ ' + inaccessibleFrames + ' cross-origin iframe(s) skipped.</span>';
-  summary += '<div style="margin-top:4px;color:#555;font-size:11px">Walked top doc' + (accessibleFrames ? ' + ' + accessibleFrames + ' iframe' + (accessibleFrames === 1 ? '' : 's') : '') + (shadowRoots ? ' + ' + shadowRoots + ' shadow root' + (shadowRoots === 1 ? '' : 's') : '') + '.</div>';
+  summary += '<div style="margin-top:6px;color:#555;font-size:16px">Walked top doc' + (accessibleFrames ? ' + ' + accessibleFrames + ' iframe' + (accessibleFrames === 1 ? '' : 's') : '') + (shadowRoots ? ' + ' + shadowRoots + ' shadow root' + (shadowRoots === 1 ? '' : 's') : '') + '.</div>';
 
   panelEl.innerHTML =
     '<header><strong>Accessible Names (' + results.length + ')</strong>' +
@@ -347,15 +333,13 @@
     li.addEventListener('click', function () {
       try {
         r.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        var prev = r.el.style.boxShadow;
-        r.el.style.transition = 'box-shadow .25s';
-        r.el.style.boxShadow = '0 0 0 4px #ffeb3b';
-        setTimeout(function () { try { r.el.style.boxShadow = prev; } catch (e) {} }, 1400);
+        r.el.style.setProperty('box-shadow', '0 0 0 4px #ffeb3b', 'important');
+        setTimeout(function () { try { r.el.style.removeProperty('box-shadow'); } catch (e) {} }, 1400);
       } catch (e) {}
     });
     list.appendChild(li);
   });
-  document.body.appendChild(panelEl);
+  shadow.appendChild(panelEl);
 
   panelEl.querySelector('#' + P + 'close').addEventListener('click', function () { window[P + 'cleanup'](); });
   panelEl.querySelector('#' + P + 'copy').addEventListener('click', function (e) {
@@ -371,11 +355,12 @@
 
   /* ---------- cleanup hook ---------- */
   window[P + 'cleanup'] = function () {
-    try { panelEl.remove(); } catch (e) {}
-    try { style.remove(); } catch (e) {}
+    try { host.remove(); } catch (e) {}
     results.forEach(function (r) {
-      try { r.badge && r.badge.remove(); } catch (e) {}
-      try { r.el.style.outline = r.origOutline; r.el.style.outlineOffset = r.origOutlineOffset; } catch (e) {}
+      try {
+        r.el.style.removeProperty('outline');
+        r.el.style.removeProperty('outline-offset');
+      } catch (e) {}
     });
     delete window[P + 'cleanup'];
     console.log('%c[a11y-names] cleared.', 'color:#003876');
