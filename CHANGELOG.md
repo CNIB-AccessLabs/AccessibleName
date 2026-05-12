@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-05-11
+
+### Fixed
+
+- **Selectors in the panel and Markdown are now unique CSS paths.** Previously the "Selector" column was a short label like `button.btn-primary` — readable but ambiguous when a page had many same-class siblings, making the value useless for pasting into DevTools. The selector now walks up the DOM with `:nth-of-type` disambiguation and short-circuits on the nearest unique-`id` ancestor, producing pastable selectors like `#main > nav > ul:nth-of-type(2) > li:nth-of-type(3) > a`.
+- **In the extensions, this also fixes the wrong-element-outlined bug**: `displayResults` uses the selector with `doc.querySelector` to re-find the element for outlining and click-to-scroll. With the old ambiguous selector, the outline could land on the first same-tag-same-class element rather than the actual one. The new selectors are unique within their document so `querySelector` resolves correctly.
+
+### Changed
+
+- Bumped extension manifests to `1.0.2`.
+
 ## [1.0.1] — 2026-05-11
 
 ### Fixed

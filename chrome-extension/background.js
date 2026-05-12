@@ -200,14 +200,47 @@ function scanFrame() {
       return "";
     }
 
-    function shortSelector(el) {
-      if (el.id) return "#" + el.id;
-      var tag = el.tagName.toLowerCase();
-      var cls = "";
-      if (typeof el.className === "string" && el.className.trim()) {
-        cls = el.className.trim().split(/\s+/).slice(0, 2).map(function (c) { return "." + c; }).join("");
+    /* Build a unique CSS selector for el by walking up the DOM, using
+     * :nth-of-type to disambiguate same-tag siblings and short-circuiting on
+     * the nearest uniquely-IDed ancestor. The result is valid CSS and pastable
+     * into DevTools. displayResults uses this selector to re-find the element
+     * in the top doc / iframe doc for outlining and click-to-scroll, so it
+     * MUST be unique within its document. */
+    function uniqueSelector(el) {
+      if (!el || el.nodeType !== 1) return "";
+      var doc = el.ownerDocument || document;
+      var root = el.getRootNode ? el.getRootNode() : doc;
+      function esc(s) {
+        return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/(["\\])/g, "\\$1");
       }
-      return tag + cls;
+      function idUnique(id) {
+        try { return root.querySelectorAll && root.querySelectorAll("#" + esc(id)).length === 1; }
+        catch (e) { return false; }
+      }
+      if (el.id && idUnique(el.id)) return "#" + esc(el.id);
+      var parts = [];
+      var cur = el;
+      var hops = 0;
+      while (cur && cur.nodeType === 1 && hops < 30) {
+        var tag = cur.tagName.toLowerCase();
+        if (cur !== el && cur.id && idUnique(cur.id)) {
+          parts.unshift("#" + esc(cur.id));
+          break;
+        }
+        var part = tag;
+        var parent = cur.parentElement;
+        if (parent) {
+          var sibs = Array.prototype.filter.call(parent.children, function (c) { return c.tagName === cur.tagName; });
+          if (sibs.length > 1) part += ":nth-of-type(" + (sibs.indexOf(cur) + 1) + ")";
+          parts.unshift(part);
+          cur = parent;
+        } else {
+          parts.unshift(part);
+          break;
+        }
+        hops++;
+      }
+      return parts.join(" > ");
     }
 
     var SELECTOR = [
@@ -244,7 +277,7 @@ function scanFrame() {
           name: an.name,
           src: an.src,
           missing: !an.name || an.src === "placeholder (not spec accname)",
-          selector: shortSelector(el),
+          selector: uniqueSelector(el),
           // Coordinates relative to THIS frame's viewport; display.js will add frame offset.
           rect: { top: r.top, left: r.left, width: r.width, height: r.height }
         });
