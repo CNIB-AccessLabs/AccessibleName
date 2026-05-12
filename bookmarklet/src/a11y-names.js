@@ -265,13 +265,18 @@
   var host = document.createElement('div');
   host.id = P + 'host';
   host.setAttribute('aria-hidden', 'true');
-  host.style.cssText = 'all:initial !important;position:absolute !important;top:0 !important;left:0 !important;width:0 !important;height:0 !important;margin:0 !important;padding:0 !important;border:0 !important;pointer-events:none !important;z-index:2147483647 !important;';
+  // Lock font-family on the host with generic CSS keywords. @font-face declarations
+  // in the page can remap specific font names like "-apple-system" or "Segoe UI",
+  // and those remappings leak into shadow trees via inheritance. CSS *generic*
+  // family keywords (ui-sans-serif, system-ui, sans-serif, ui-monospace, monospace)
+  // are language tokens, not font names, and cannot be overridden by @font-face.
+  host.style.cssText = 'all:initial !important;position:absolute !important;top:0 !important;left:0 !important;width:0 !important;height:0 !important;margin:0 !important;padding:0 !important;border:0 !important;font:400 16px/1.4 ui-sans-serif,system-ui,sans-serif !important;color:#111 !important;pointer-events:none !important;z-index:2147483647 !important;';
   (document.body || document.documentElement).appendChild(host);
   var shadow = host.attachShadow({ mode: 'closed' });
 
   var css =
-    ':host{all:initial;}' +
-    '*,*::before,*::after{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,Helvetica,Arial,sans-serif;font-style:normal;font-weight:normal;font-variant:normal;text-transform:none;letter-spacing:normal;text-decoration:none;color:#111;}' +
+    ':host{all:initial;font-family:ui-sans-serif,system-ui,sans-serif !important;}' +
+    '*,*::before,*::after{box-sizing:border-box;font-family:ui-sans-serif,system-ui,sans-serif !important;font-style:normal !important;font-weight:400 !important;font-variant:normal !important;text-transform:none !important;letter-spacing:normal !important;text-decoration:none !important;color:#111;}' +
     '.badge{position:absolute;background:#003876;color:#fff;font-size:16px;font-weight:600;line-height:1.2;padding:4px 8px;border-radius:3px;pointer-events:none;max-width:380px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 3px rgba(0,0,0,.4);}' +
     '.badge.miss{background:#b00020;}' +
     '.panel{position:fixed;top:12px;right:12px;width:440px;max-height:85vh;display:flex;flex-direction:column;background:#fff;color:#111;border:1px solid #bbb;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:16px;line-height:1.4;pointer-events:auto;}' +
@@ -291,7 +296,10 @@
     '.panel li .name{font-weight:600;color:#111;font-size:16px;}' +
     '.panel li .miss{color:#b00020;font-weight:600;font-size:16px;}' +
     '.panel li .src{color:#666;font-size:16px;font-style:italic;margin-top:2px;word-break:break-all;}' +
-    '.panel code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:16px;background:rgba(0,0,0,.06);padding:1px 5px;border-radius:3px;}';
+    '.panel code{font-family:ui-monospace,monospace !important;font-size:16px;background:rgba(0,0,0,.06);padding:1px 5px;border-radius:3px;}' +
+    '.panel header strong{font-weight:600 !important;font-size:18px;}' +
+    '.badge{font-weight:600 !important;}' +
+    '.panel .summary .miss,.panel .summary .ok,.panel .summary .warn,.panel li .name,.panel li .miss{font-weight:600 !important;}';
 
   var styleEl = document.createElement('style');
   styleEl.textContent = css;

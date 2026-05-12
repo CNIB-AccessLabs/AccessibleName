@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-05-11
+
+### Fixed
+
+- **`@font-face` hijacking leaked into the inspector UI** despite Shadow DOM isolation. v1.0.1's Shadow DOM correctly blocked selector inheritance, but `@font-face` rules in the host document are global — they remap font *names* across the whole document, including shadow trees. A page that declares `@font-face { font-family: -apple-system; src: url(lobster.woff); }` makes every `-apple-system` lookup resolve to Lobster, even inside our shadow root. The UI now uses only **CSS generic font-family keywords** (`ui-sans-serif`, `system-ui`, `sans-serif`, `ui-monospace`, `monospace`), which are language tokens rather than font names and cannot be redefined by `@font-face`. The host element's font is also locked via inline `style` with `!important`, and key font properties inside the shadow are marked `!important`.
+
+### Changed
+
+- Bumped extension manifests to `1.0.3`.
+
 ## [1.0.2] — 2026-05-11
 
 ### Fixed
